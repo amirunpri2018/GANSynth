@@ -19,8 +19,8 @@ class PGGAN(object):
 
     def __init__(self, min_resolution, max_resolution, min_channels, max_channels, apply_spectral_norm):
 
-        self.min_resolution = np.asarray(min_resolution)
-        self.max_resolution = np.asarray(max_resolution)
+        self.min_resolution = np.asanyarray(min_resolution)
+        self.max_resolution = np.asanyarray(max_resolution)
         self.min_channels = min_channels
         self.max_channels = max_channels
         self.apply_spectral_norm = apply_spectral_norm

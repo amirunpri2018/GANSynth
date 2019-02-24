@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import spectral_ops
+import ops
 import functools
 import os
 
@@ -47,7 +48,7 @@ class NSynth(object):
 
         return wave, label, pitch, source
 
-    def preprocess(self, waves, labels, pitches, sources):
+    def preprocess(self, waves, labels, pitches, sources, downscale):
         # =========================================================================================
         time_steps, num_freq_bins = self.spectrogram_shape
         # =========================================================================================
@@ -94,11 +95,12 @@ class NSynth(object):
 
         log_mel_magnitudes = scale(log_mel_magnitudes, -14.0, 6.0, -1.0, 1.0)
 
-        data = tf.stack([log_mel_magnitudes, mel_instantaneous_frequencies], axis=1)
+        images = tf.stack([log_mel_magnitudes, mel_instantaneous_frequencies], axis=1)
+        images = ops.downscale2d(images, downscale)
 
-        return data, labels
+        return images, labels
 
-    def real_input_fn(self, filenames, batch_size, num_epochs, shuffle):
+    def real_input_fn(self, filenames, batch_size, num_epochs, shuffle, downscale):
 
         dataset = tf.data.TFRecordDataset(filenames)
         if shuffle:
@@ -124,7 +126,10 @@ class NSynth(object):
         ))
         dataset = dataset.batch(batch_size=batch_size)
         dataset = dataset.map(
-            map_func=self.preprocess,
+            map_func=functools.partial(
+                self.preprocess,
+                downscale=downscale
+            ),
             num_parallel_calls=os.cpu_count()
         )
         dataset = dataset.prefetch(buffer_size=1)

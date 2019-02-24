@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
-import itertools
-import functools
+from ops import *
 import os
 
 
@@ -28,15 +27,16 @@ class GANSynth(object):
             self.name = name
             self.hyper_params = hyper_params
             # =========================================================================================
-            # global step
+            # training progress
             self.global_step = tf.get_variable("global_step", initializer=0, trainable=False)
             self.max_steps = max_steps
+            self.progress = self.global_step / self.max_steps
             # =========================================================================================
-            # resolution schedule
+            # downscale factor of real images
             self.min_depth = log2(min_resolution, min_resolution)
             self.max_depth = log2(min_resolution, max_resolution)
-            self.out_depth = (self.max_depth - self.min_depth) / self.max_steps * self.global_step + self.min_depth
-            self.downscale = 2 ** (self.max_depth - tf.cast(tf.ceil(self.out_depth), tf.int32))
+            self.io_depth = scale(self.progress, 0.0, 1.0, self.min_depth, self.max_depth)
+            self.downscale = tf.bitwise.left_shift(1, self.max_depth - tf.cast(tf.ceil(self.io_depth), tf.int32))
             # =========================================================================================
             # input_fn for real data and fake data
             with tf.device("/cpu:0"):
@@ -44,11 +44,11 @@ class GANSynth(object):
                 self.fake_latents, self.fake_labels = fake_input_fn()
             # =========================================================================================
             # generated fake data
-            self.fake_images = generator(self.fake_latents, self.fake_labels, self.out_depth, "generator")
+            self.fake_images = generator(self.fake_latents, self.fake_labels, self.progress, "generator")
             # =========================================================================================
             # logits for real data and fake data
-            self.real_logits = discriminator(self.real_images, self.real_labels, self.out_depth, "discriminator")
-            self.fake_logits = discriminator(self.fake_images, self.fake_labels, self.out_depth, "discriminator", reuse=True)
+            self.real_logits = discriminator(self.real_images, self.real_labels, self.progress, "discriminator")
+            self.fake_logits = discriminator(self.fake_images, self.fake_labels, self.progress, "discriminator", reuse=True)
             #========================================================================#
             # hinge loss for discriminator and generator
             self.discriminator_loss = tf.reduce_mean(tf.nn.relu(1 - self.real_logits))

@@ -194,3 +194,8 @@ def projection(inputs, labels, variance_scale=2, scale_weight=True, apply_spectr
     labels = tf.nn.embedding_lookup(weight, tf.argmax(labels, axis=1))
     inputs = tf.reduce_mean(inputs * labels, axis=1, keepdims=True)
     return inputs
+
+
+def scale(inputs, in_min, in_max, out_min, out_max):
+    inputs = out_min + (inputs - in_min) / (in_max - in_min) * (out_max - out_min)
+    return inputs

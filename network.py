@@ -28,7 +28,7 @@ class PGGAN(object):
         self.min_depth = log2(self.min_resolution, self.min_resolution)
         self.max_depth = log2(self.min_resolution, self.max_resolution)
 
-    def generator(self, latents, labels, out_depth, name="ganerator", reuse=None):
+    def generator(self, latents, labels, progress, name="ganerator", reuse=None):
 
         def resolution(depth):
             return self.min_resolution << depth
@@ -43,9 +43,9 @@ class PGGAN(object):
                     with tf.variable_scope("dense"):
                         inputs = dense(
                             inputs=inputs,
-                            units=channels(depth) * self.min_resolution.prod()
+                            units=channels(depth) * resolution(depth).prod()
                         )
-                        inputs = tf.reshape(inputs, [-1, channels(depth), *self.min_resolution])
+                        inputs = tf.reshape(inputs, [-1, channels(depth), *resolution(depth)])
                         inputs = tf.nn.leaky_relu(inputs)
                         inputs = pixel_norm(inputs)
                     with tf.variable_scope("conv"):
@@ -88,6 +88,8 @@ class PGGAN(object):
                     inputs = tf.nn.tanh(inputs)
                 return inputs
 
+        io_depth = scale(progress, 0.0, 1.0, self.min_depth, self.max_depth)
+
         def grow(feature_maps, depth):
 
             def high_resolution_images():
@@ -101,28 +103,28 @@ class PGGAN(object):
 
             if depth == self.min_depth:
                 images = tf.cond(
-                    pred=tf.greater(out_depth, depth),
+                    pred=tf.greater(io_depth, depth),
                     true_fn=high_resolution_images,
                     false_fn=middle_resolution_images
                 )
             elif depth == self.max_depth:
                 images = tf.cond(
-                    pred=tf.greater(out_depth, depth),
+                    pred=tf.greater(io_depth, depth),
                     true_fn=color_block(conv_block(feature_maps, depth), depth),
                     false_fn=lerp(
                         a=low_resolution_images(),
                         b=middle_resolution_images(),
-                        t=out_depth - (depth - 1)
+                        t=io_depth - (depth - 1)
                     )
                 )
             else:
                 images = tf.cond(
-                    pred=tf.greater(out_depth, depth),
+                    pred=tf.greater(io_depth, depth),
                     true_fn=high_resolution_images,
                     false_fn=lambda: lerp(
                         a=low_resolution_images(),
                         b=middle_resolution_images(),
-                        t=out_depth - (depth - 1)
+                        t=io_depth - (depth - 1)
                     )
                 )
             return images
@@ -130,7 +132,7 @@ class PGGAN(object):
         with tf.variable_scope(name, reuse=reuse):
             return grow(tf.concat([latents, labels], axis=-1), self.min_depth)
 
-    def discriminator(self, images, labels, out_depth, name="dicriminator", reuse=None):
+    def discriminator(self, images, labels, progress, name="dicriminator", reuse=None):
 
         def resolution(depth):
             return self.min_resolution << depth
@@ -195,6 +197,8 @@ class PGGAN(object):
                         inputs = tf.nn.leaky_relu(inputs)
                 return inputs
 
+        io_depth = scale(progress, 0.0, 1.0, self.min_depth, self.max_depth)
+
         def grow(images, depth):
 
             def high_resolution_feature_maps():
@@ -208,28 +212,28 @@ class PGGAN(object):
 
             if depth == self.min_depth:
                 feature_maps = tf.cond(
-                    pred=tf.greater(out_depth, depth),
+                    pred=tf.greater(io_depth, depth),
                     true_fn=high_resolution_feature_maps,
                     false_fn=middle_resolution_feature_maps
                 )
             elif depth == self.max_depth:
                 feature_maps = tf.cond(
-                    pred=tf.greater(out_depth, depth),
+                    pred=tf.greater(io_depth, depth),
                     true_fn=lambda: conv_block(color_block(images, depth), depth),
                     false_fn=lambda: lerp(
                         a=low_resolution_feature_maps(),
                         b=middle_resolution_feature_maps(),
-                        t=out_depth - (depth - 1)
+                        t=io_depth - (depth - 1)
                     )
                 )
             else:
                 feature_maps = tf.cond(
-                    pred=tf.greater(out_depth, depth),
+                    pred=tf.greater(io_depth, depth),
                     true_fn=high_resolution_feature_maps,
                     false_fn=lambda: lerp(
                         a=low_resolution_feature_maps(),
                         b=middle_resolution_feature_maps(),
-                        t=out_depth - (depth - 1)
+                        t=io_depth - (depth - 1)
                     )
                 )
             return feature_maps
